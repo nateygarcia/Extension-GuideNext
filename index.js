@@ -1,32 +1,80 @@
-const { Popup, POPUP_TYPE, POPUP_RESULT, extensionSettings } = SillyTavern.getContext();
+const { Popup, POPUP_TYPE, POPUP_RESULT, extensionSettings, saveSettingsDebounced } = SillyTavern.getContext();
 
-const MODULE_NAME = "nateyg_guidenext"
+const MODULE_NAME = "nateyg_guidenext";
+let lastMessage = null;
+const settings = initializeSettings();
 
+function initializeSettings() {
+    const defaultSettings = {
+        enabled: false,
+    };
 
-const defaultSettings = Object.freeze({
-    enabled: false
-});
+    extensionSettings[MODULE_NAME] ??= {};
 
-function getSettings() {
-    if (!extensionSettings[MODULE_NAME]) {
-        extensionSettings[MODULE_NAME] = structuredClone(defaultSettings);
-    }
+    const settings = extensionSettings[MODULE_NAME];
 
-    // Update fields if they don't exist (for updates and such)
-    for (const key of Object.keys(defaultSettings)) {
-        if (!Object.hasOwn(extensionSettings[MODULE_NAME], key)) {
-            extensionSettings[MODULE_NAME][key] = defaultSettings[key];
+    for (const [key, value] of Object.entries(defaultSettings)) {
+        if (!(key in settings)) {
+            settings[key] = value;
         }
     }
 
-    return extensionSettings[MODULE_NAME];
+    saveSettingsDebounced();
+
+    return settings;
+}
+
+function addButton() {
+    const enabledIcon = 'fa-solid fa-comment';
+    const disabledIcon = 'fa-solid fa-comment-slash';
+
+    const getIcon = () => settings.enabled ? enabledIcon : disabledIcon;
+
+    const button = document.createElement('div');
+    button.id = 'guideNextButton';
+    button.classList.add('interactable');
+    button.tabIndex = 0;
+    button.title = 'Toggle GuideNext';
+
+    const icon = document.createElement('i');
+    icon.className = getIcon();
+    button.appendChild(icon);
+
+    const extensionsButton = document.getElementById('extensionsMenuButton');
+    if (!extensionsButton) {
+        throw new Error("Couldn't find extensionsMenuButton");
+    }
+
+    // Without this the button will get added before everything else for some reason
+    button.style.order = getComputedStyle(extensionsButton).order;
+
+    extensionsButton.insertAdjacentElement('afterend', button);
+    button.addEventListener('click', () => {
+        toggleEnabled();
+        icon.className = getIcon();
+    })
+}
+
+function toggleEnabled() {
+    settings.enabled = !settings.enabled;
+    saveSettingsDebounced();
 }
 
 globalThis.guideNextInterceptor = async function(chat, contextSize, abort, type) {
+    if(!settings.enabled) {
+        return;
+    }
+
+    if(type !== 'swipe' && type !== 'regenerate') {
+        lastMessage = null;
+    }
+
+    const defaultValue = lastMessage ?? 'For the next message: ';
+
     const popup = new Popup(
         '<div>Enter guidance</div>',
         POPUP_TYPE.INPUT,
-        'For the next message: ',
+        defaultValue,
         {
             wide: true,
             rows: 10,
@@ -59,6 +107,7 @@ globalThis.guideNextInterceptor = async function(chat, contextSize, abort, type)
         return;
     }
 
+    lastMessage = value;
     chat.push({
         is_user: false,
         name: "System Note",
@@ -69,3 +118,9 @@ globalThis.guideNextInterceptor = async function(chat, contextSize, abort, type)
         }
     });
 }
+
+function init() {
+    addButton();
+}
+
+init();
