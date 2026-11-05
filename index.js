@@ -69,7 +69,7 @@ globalThis.guideNextInterceptor = async function(chat, contextSize, abort, type)
         lastMessage = null;
     }
 
-    const defaultValue = lastMessage ?? 'For the next message: ';
+    const defaultValue = lastMessage ?? '';
 
     const popup = new Popup(
         '<div>Enter guidance</div>',
@@ -102,8 +102,7 @@ globalThis.guideNextInterceptor = async function(chat, contextSize, abort, type)
 
     const value = popup.value;
     if(value.trim() === ''){
-        toastr.error("Message cannot be empty.");
-        abort(true);
+        toastr.info("Empty GuideNext message ignored.");
         return;
     }
 
